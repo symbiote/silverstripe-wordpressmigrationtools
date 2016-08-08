@@ -14,5 +14,8 @@
         "silverstripe/framework": "~3.2",
         "silverstripe/cms": "~3.2",
         "php": ">=5.3.0"
+    },
+    "extra": {
+        "installer-name": "wordpressmigrationtools"
     }
 }

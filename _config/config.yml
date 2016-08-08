@@ -1,0 +1,11 @@
+---
+Name: wordpressmigrationtools
+After: framework/routes#coreroutes
+---
+WordpressImportBasicTask:
+  default_db:
+    database: 'wordpress-database'
+    username: 'root'
+    password: ''
+    table_prefix: 'wp'
+  navigation_slug: ''

@@ -1,0 +1,18 @@
+{
+    "name": "silbinarywolf/silverstripe-wordpressmigrationtools",
+    "type": "silverstripe-module",
+    "description": "A wordpress importer that handles various operations.",
+    "keywords": ["wordpress", "silverstripe"],
+	"license": "BSD-3-Clause",
+    "authors": [
+    {
+        "name": "Jake Bentvelzen",
+        "email": "jake@silverstripe.com.au"
+    }],
+    "require": {
+        "silbinarywolf/php-wordpress-database-tools": "~1.0",
+        "silverstripe/framework": "~3.2",
+        "silverstripe/cms": "~3.2",
+        "php": ">=5.3.0"
+    }
+}

@@ -115,13 +115,21 @@ class WordpressImportDataExtension extends DataExtension {
 				}
 
 				// setWordpressID
+				$wordpressID = null;
 				if (isset($wordpressData['ID'])) {
 					// Handle ID format for anything in wp_posts table.
-					$this->owner->WordpressID = $wordpressData['ID'];
+					$wordpressID = $wordpressData['ID'];
+				} else if (isset($wordpressData['term_id'])) {
+					// Handle ID format for anything in wp_terms table.
+					$wordpressID = $wordpressData['term_id'];
 				} else if (isset($wordpressData['id'])) {
 					// Handle ID format for Gravity Forms
-					$this->owner->WordpressID = $wordpressData['id'];
+					$wordpressID = $wordpressData['id'];
 				}
+				if ($wordpressID === null) {
+					throw new Exception('Attempted to write record without setting WordpressID.');
+				}
+				$this->owner->WordpressID = $wordpressID;
 				$this->owner->WordpressParentID = isset($wordpressData['post_parent']) ? $wordpressData['post_parent'] : null;
 
 				// encodeMeta

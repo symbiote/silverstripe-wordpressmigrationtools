@@ -51,6 +51,32 @@ class WordpressImportService extends Object {
 	}
 
 	/**
+	 * Write and publish a record
+	 *
+	 * @return boolean
+	 */
+	public function writeAndPublishRecord($record, $publishIfTrue = true) {
+		$isNew = $record->exists();
+		try {
+			$record->write();
+			$this->log($record, $isNew ? 'created' : 'changed');
+			if ($publishIfTrue) {
+				/*if ($record->hasMethod('doPublish')) {
+					$record->doPublish();
+					$this->log($record, 'published');
+				} else*/ if ($record->hasMethod('publish')) {
+					$record->publish('Stage', 'Live');
+					$this->log($record, 'published');
+				}
+			}
+			return true;
+		} catch (Exception $e) {
+			throw $e;
+		}
+		return false;
+	}
+
+	/**
 	 * Import Wordpress post data as Silverstripe pages.
 	 *
 	 * If a record exists and the data no longer matches the Wordpress DB, then 
@@ -98,12 +124,8 @@ class WordpressImportService extends Object {
 					$record->Sort = 9000000;
 					$this->setContentOnRecord($record, $wpData['post_content']);
 					try {
-						$record->write();
-						$this->log($record, 'changed');
-						if (isset($wpData['post_status']) && $wpData['post_status'] === 'publish') {
-							$record->publish('Stage', 'Live');
-							$this->log($record, 'published');
-						}
+						$isPublished = (isset($wpData['post_status']) && $wpData['post_status'] === 'publish');
+						$this->writeAndPublishRecord($record, $isPublished);
 					} catch (Exception $e) {
 						$this->log($record, 'error', $e);
 						throw $e;
@@ -116,12 +138,7 @@ class WordpressImportService extends Object {
 					{
 						try {
 							$isPublished = ((isset($wpData['post_status']) && $wpData['post_status'] === 'publish') || $record->isPublished());
-							$record->write();
-							$this->log($record, 'changed');
-							if ($isPublished) {
-								$record->publish('Stage', 'Live');
-								$this->log($record, 'published');
-							}
+							$this->writeAndPublishRecord($record, $isPublished);
 						} catch (Exception $e) {
 							$this->log($record, 'error', $e);
 							throw $e;
@@ -358,13 +375,7 @@ class WordpressImportService extends Object {
 			//Debug::dump($record->toMap()); 
 			try {
 				$isPublished = ((isset($gfData['is_active']) && $gfData['is_active']) || $record->isPublished());
-				$isNew = $record->exists();
-				$record->write();
-				$this->log($record, $isNew ? 'created' : 'changed');
-				if ($isPublished) {
-					$record->publish('Stage', 'Live');
-					$this->log($record, 'published');
-				}
+				$this->writeAndPublishRecord($record, $isPublished);
 			} catch (Exception $e) {
 				$this->log($record, 'error', $e);
 				throw $e;
@@ -510,12 +521,9 @@ class WordpressImportService extends Object {
 				if ($record->ParentID != $ssID) {
 					$record->ParentID = $ssID;
 					try {
-						$record->write();
-						$this->log($record, 'changed');
-						$record->publish('Stage', 'Live');
-						$this->log($record, 'published');
+						$this->writeAndPublishRecord($record);
 					} catch (Exception $e) {
-						DB::alteration_message('Failed to write #'.$record->ID. ' -- '.$e->getMessage(), 'error');
+						$this->log($record, 'error', $e);
 					}
 				}
 			}
@@ -578,10 +586,7 @@ class WordpressImportService extends Object {
 				$calendarHolder->URLSegment = 'events';
 				$calendarHolder->WordpressData = 1;
 				try {
-					$calendarHolder->write();
-					$this->log($calendarHolder, 'created');
-					$calendarHolder->publish('Stage', 'Live');
-					$this->log($calendarHolder, 'published');
+					$this->writeAndPublishRecord($calendarHolder);
 				} catch (Exception $e) {
 					$this->log($calendarHolder, 'error', $e);
 				}
@@ -651,12 +656,7 @@ class WordpressImportService extends Object {
 			if ($changedFields = $record->getChangedFields(true, DataObject::CHANGE_VALUE)) {
 				try {
 					$isPublished = ((isset($wpData['post_status']) && $wpData['post_status'] === 'publish') || $record->isPublished());
-					$record->write();
-					$this->log($record, 'changed');
-					if ($isPublished) {
-						$record->publish('Stage', 'Live');
-						$this->log($record, 'published');
-					}
+					$this->writeAndPublishRecord($record, $isPublished);
 				} catch (Exception $e) {
 					$this->log($record, 'error', $e);
 				}
@@ -820,12 +820,9 @@ class WordpressImportService extends Object {
 		));
 		foreach ($list as $record) {
 			$record->ShowInMenus = 0;
+			$record->WordpressData = true;
 			try {
-				$record->WordpressData = true;
-				$record->write();
-				$this->log($record, 'changed');
-				$record->publish('Stage', 'Live');
-				$this->log($record, 'published');
+				$this->writeAndPublishRecord($record);
 			} catch (Exception $e) {
 				$this->log($record, 'error', $e);
 			}
@@ -947,10 +944,7 @@ class WordpressImportService extends Object {
 			if ($changedFields = $record->getChangedFields(true, DataObject::CHANGE_VALUE))
 			{
 				try {
-					$record->write();
-					$this->log($record, 'changed');
-					$record->publish('Stage', 'Live');
-					$this->log($record, 'published');
+					$this->writeAndPublishRecord($record);
 					$trackRecordsChangedByIDs[$record->ID] = $record->ID;
 				} catch (Exception $e) {
 					$this->log($record, 'error', $e);
@@ -995,10 +989,7 @@ class WordpressImportService extends Object {
 							}
 						}
 						try {
-							$record->write();
-							$this->log($record, 'changed');
-							$record->publish('Stage', 'Live');
-							$this->log($record, 'published');
+							$this->writeAndPublishRecord($record);
 						} catch (Exception $e) {
 							$this->log($record, 'error', $e);
 							throw $e;

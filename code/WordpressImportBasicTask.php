@@ -37,6 +37,13 @@ class WordpressImportBasicTask extends BuildTask {
 	private static $navigation_slug = '';
 
 	/**
+	 * The assets directory 
+	 *
+	 * @var string
+	 */
+	private static $assets_dir = "";
+
+	/**
 	 * @var array
 	 */
 	private static $dependencies = array(
@@ -95,6 +102,14 @@ class WordpressImportBasicTask extends BuildTask {
 		WordpressDatabase::$default_config = $this->config()->default_db;
 		$this->db = $this->wordpressImportService->getDatabase();
 
+		// Login as default admin so 'canPublish()' definitely returns true in 'SiteTree::doPublish()'
+		if (!Member::currentUser()) {
+			$defaultAdmin = Member::default_admin();
+			if ($defaultAdmin && $defaultAdmin->exists()) {
+				Session::set('loggedInAs', $defaultAdmin->ID);
+			}
+		}
+
 		// Unsure if the importing functionality can ever hit this, but just incase.
 		if (Versioned::current_stage() !== 'Stage') {
 			throw new Exception('Versioned::current_stage() must be "Stage".');
@@ -107,15 +122,23 @@ class WordpressImportBasicTask extends BuildTask {
 		$navSlug = $this->config()->navigation_slug;
 		if ($navSlug === '') {
 			try {
+				// NOTE(Jake): If blank value is passed to 'updatePagesBasedOnNavMenu', it'll tell you the available menus with
+				//			   an exception
 				$this->wordpressImportService->updatePagesBasedOnNavMenu();
 			} catch (WordpressImportException $e) {
 				$this->wordpressImportService->log($e->toMessage(), 'error');
 			}
 			throw new WordpressImportException(__CLASS__.'::navigation_slug must be configured as either "false" or a menu');
 		}
+		$assetsDir = $this->config()->assets_dir;
+		if ($assetsDir === '') {
+			throw new WordpressImportException(__CLASS__.'::assets_dir must be configured as "false" or the local filepath of the WP assets. ie. C:\\wamp\\www\\SilverstripeExample\\assets\\WordpressUploads');
+		}
 
 		try {
-			$this->wordpressImportService->importAttachmentsAsFiles("C:\\wamp\\www\\Projects\\DPCAustraliaDay\\assets\\WordpressUploads");
+			if ($assetsDir) {
+				$this->wordpressImportService->importAttachmentsAsFiles($assetsDir);
+			}
 			
 			// Import flat list of the pages
 			$this->wordpressImportService->importPages();

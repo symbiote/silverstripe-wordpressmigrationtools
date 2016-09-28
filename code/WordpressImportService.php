@@ -51,30 +51,32 @@ class WordpressImportService extends Object {
 	}
 
 	/**
-	 * Write and publish a record
-	 *
-	 * @return boolean
-	 */
-	public function writeAndPublishRecord($record, $publishIfTrue = true) {
-		$isNew = $record->exists();
-		try {
-			$record->write();
-			$this->log($record, $isNew ? 'created' : 'changed');
-			if ($publishIfTrue) {
-				/*if ($record->hasMethod('doPublish')) {
-					$record->doPublish();
-					$this->log($record, 'published');
-				} else*/ if ($record->hasMethod('publish')) {
-					$record->publish('Stage', 'Live');
-					$this->log($record, 'published');
-				}
-			}
-			return true;
-		} catch (Exception $e) {
-			throw $e;
-		}
-		return false;
-	}
+     * Write and publish a record
+     *
+     * @return boolean
+     */
+    public function writeAndPublishRecord($record, $publishIfTrue = true) {
+        $isExisting = $record->exists();
+        try {
+            $record->write();
+            $this->log($record, $isExisting ? 'changed' : 'created');
+            if ($publishIfTrue) {
+                if ($record->hasMethod('doPublish')) {
+                    if ($record->doPublish() === false) {
+                        throw new Exception('Unable to publish #'.$record->ID);
+                    }
+                    $this->log($record, 'published');
+                } else if ($record->hasMethod('publish')) {
+                    $record->publish('Stage', 'Live');
+                    $this->log($record, 'published');
+                }
+            }
+            return true;
+        } catch (Exception $e) {
+            throw $e;
+        }
+        return false;
+    }
 
 	/**
 	 * Import Wordpress post data as Silverstripe pages.
@@ -460,15 +462,20 @@ class WordpressImportService extends Object {
 				// Convert from Windows backslash to *nix forwardslash
 				$relativeFilepath = str_replace("\\", '/', $relativeFilepath);
 
+				// Add S3 CDN path to the record
+				$cdnFile = '';
+				if (isset($wpMeta['amazonS3_info']) && isset($wpMeta['amazonS3_info']['key'])) {
+					$cdnFile = 'Cdn:||' . $wpMeta['amazonS3_info']['key'];
+				}
+
 				// Feed record data into the object directly
 				$recordData = array(
 					'Title' => $wpData['post_title'],
 					'Created'  => $wpData['post_date'],
 					'LastEdited' =>  $wpData['post_modified'],
-					// NOTE(Jake): These fields aren't normally on File/Image table, but its set in the case
-					//			   that someone is using ba-sis or extending to add a Content area.
-					'Content' => $wpData['post_content'], // Conventional
-					'Description' => $wpData['post_content'], // Added by SSAU/ba-sis
+					'Content' => $wpData['post_content'],
+					'Description' => $wpData['post_content'], // Support SSAU/ba-sis (https://github.com/silverstripe-australia/silverstripe-ba-sis)
+					'CDNFile' => $cdnFile, // Support SSAU/cdncontent module (https://github.com/silverstripe-australia/silverstripe-cdncontent)
 				);
 				if ($fileResolver->isFileExtensionImage($relativeFilepath)) {
 					$record = Image::create($recordData);
@@ -653,7 +660,10 @@ class WordpressImportService extends Object {
 				$record->Lng = $wpMeta['evcal_lng'];
 			}
 
-			if ($changedFields = $record->getChangedFields(true, DataObject::CHANGE_VALUE)) {
+			$changedFields = $record->getChangedFields(true, DataObject::CHANGE_VALUE);
+			unset($changedFields['Lat']);
+			unset($changedFields['Lng']);
+			if ($changedFields) {
 				try {
 					$isPublished = ((isset($wpData['post_status']) && $wpData['post_status'] === 'publish') || $record->isPublished());
 					$this->writeAndPublishRecord($record, $isPublished);
@@ -1119,8 +1129,7 @@ class WordpressImportService extends Object {
 	 * Write an ElementContent block with $Content
 	 */
 	public function setElementalContent(DataObjectInterface $record, $post_content) {
-		if (!isset($this->_classes_using_wordpress_extension['ElementContent']))
-		{
+		if (!isset($this->_classes_using_wordpress_extension['ElementContent'])) {
 			throw new WordpressImportException('Must put "WordpressImportDataExtension" on BaseElement.');
 		}
 		if (!isset($this->_classes_using_elemental[$record->class])) {
@@ -1148,24 +1157,30 @@ class WordpressImportService extends Object {
 				$subRecord = ElementContent::create();
 			}
 			// Avoid getChangedFields triggering below by checking equality first.
-			if ($subRecord->HTML !== $post_content) 
-			{
+			if ($subRecord->HTML !== $post_content)  {
 				$subRecord->HTML = $post_content;
 			}
 			$subRecord->WordpressData = $record->WordpressData;
 			if (!$subRecord->exists()) {
 				$elementBlocks->add($subRecord);
-			} else if ($changedFields = $subRecord->getChangedFields(true, DataObject::CHANGE_VALUE)) {
-				try {
-					$subRecord->write();
-					$this->log($subRecord, 'changed', null, 1);
-					if ($record->isPublished() && $subRecord->hasMethod('publish')) {
-						$subRecord->publish('Stage', 'Live');
-						$this->log($subRecord, 'published', null, 1);
+			} else {
+				$changedFields = $subRecord->getChangedFields(true, DataObject::CHANGE_VALUE);
+				// NOTE(Jake): Checking for changes against HTML can be finicky, so ignore it. Any changes
+				//			   should be caught in the 'WordpressData' serialized-string and trigger a write
+				//			   anyway.
+				unset($changedFields['HTML']);
+				if ($changedFields) {
+					try {
+						$subRecord->write();
+						$this->log($subRecord, 'changed', null, 1);
+						if ($record->isPublished() && $subRecord->hasMethod('publish')) {
+							$subRecord->publish('Stage', 'Live');
+							$this->log($subRecord, 'published', null, 1);
+						}
+					} catch (Exception $e) {
+						$this->log($subRecord, 'error', $e, 1);
+						throw $e;
 					}
-				} catch (Exception $e) {
-					$this->log($subRecord, 'error', $e, 1);
-					throw $e;
 				}
 			}
 		}

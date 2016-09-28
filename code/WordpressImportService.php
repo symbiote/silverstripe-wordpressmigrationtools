@@ -678,6 +678,41 @@ class WordpressImportService extends Object {
 	}
 
 	/**
+	 * Basically works like SiteTree::get_by_link but is capable of accounting for Multisites.
+	 *
+	 * @return SiteTree
+	 */
+	public function getByLink($link, $findOldPageFallback = true) {
+		$prefix = '';
+		if (class_exists('Multisites')) {
+			$site = Multisites::inst()->getCurrentSite();
+			if ($site) {
+				$prefix = $site->URLSegment.'/';
+			}
+		}
+		$link = trim($link, '/');
+		$linkDirParts = explode('/', $link);
+
+		$result = SiteTree::get_by_link($prefix.$link.'/');
+		if ($result) {
+			// Check if URLSegment matches the last part of the URL, as get_by_link
+			// will return the parent page if there's no match.
+			if ($result->URLSegment && $result->URLSegment === end($linkDirParts)) {
+				return $result;
+			}
+			return false;
+		}
+		if ($findOldPageFallback) {
+			$url = OldPageRedirector::find_old_page($linkDirParts);
+			if ($url) {
+				$result = $this->getByLink($url, false);
+				return $result;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * 
 	 */
 	public function fixPostContentURLs() {
@@ -737,16 +772,10 @@ class WordpressImportService extends Object {
 					if ($wordpressSiteURL && strpos($attrValue, $wordpressSiteURL) !== FALSE) {
 						// Replace any 'www.mywordpress.com' href's with a shortcode
 						$relativeLink = str_replace($wordpressSiteURL, '', $attrValue);
-						$page = SiteTree::get_by_link($relativeLink);
+						$page = $this->getByLink($relativeLink);
 						if ($page) {
-							$relativeLinkDirParts = explode('/', $relativeLink);
-							$relativeLinkFinalDirPart = end($relativeLinkDirParts);
-							// Ensure the page obtained has a matching URLSegment
-							if ($page->URLSegment === $relativeLinkFinalDirPart) {
-								$htmlAttr->value = '[sitetree_link,id='.$page->ID.']';
-							} else {
-								$this->log('Record #'.$record->ID.' - Unable to make URL relative on attribute "'.$attrName.'": '.$attrValue, 'error', null, 1);
-							}
+							$htmlAttr->value = '[sitetree_link,id='.$page->ID.']';
+							//$this->log('Record #'.$record->ID.' - Mismatching URLSegment depth - Unable to make URL relative on attribute "'.$attrName.'": '.$attrValue, 'error', null, 1);
 						} else {
 							$filename = WordpressAttachmentFileResolver::extract_year_and_month($attrValue);
 							if ($filename) {
@@ -1033,7 +1062,7 @@ class WordpressImportService extends Object {
 		}
 
 		// Set default root parent ID
-		if (class_exists('Multisites')) 
+		if (class_exists('Multisites') && $this->root_parent_id == 0) 
 		{
 			$site = null;
 			$sites = Site::get()->toArray();

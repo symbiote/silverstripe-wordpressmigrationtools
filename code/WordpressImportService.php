@@ -783,6 +783,7 @@ class WordpressImportService extends Object {
 								$isAssetURL = true;
 							} else {
 								$this->log('Record #'.$record->ID.' - Unable to make URL relative on attribute "'.$attrName.'": '.$attrValue, 'error', null, 1);
+								continue;
 							}
 						}
 					}
@@ -801,7 +802,7 @@ class WordpressImportService extends Object {
 						}
 
 						if (!isset($fileOldURLtoNewURL[$filename]) || !isset($fileOldURLtoID[$filename])) {
-							$this->log("Record #".$record->ID." - Cannot find file: ".$filename, 'error', null, 1);
+							$this->log("Record #".$record->ID." - Cannot find asset in File table: ".$attrValue, 'error', null, 1);
 							continue;
 						}
 					
@@ -813,13 +814,18 @@ class WordpressImportService extends Object {
 						if ($attrValue !== $relativeLink) {
 							$htmlAttr->value = $relativeLink;
 						}
+					} else if (strpos($attrValue, 'http') !== FALSE) {
+						$this->log('Record #'.$record->ID.' - Invalid URL, not found in sitetree or asset on attribute "'.$attrName.'": '.$attrValue, 'error', null, 1);
 					}
 				}
 			});
 			if ($content !== $newContent) {
 				try {
-					$this->setContentOnRecord($record, $newContent);
-					$this->log($record, 'changed');
+					$calledWriteAlready = $this->setContentOnRecord($record, $newContent);
+					if (!$calledWriteAlready) {
+						$isPublished = ((isset($wpData['post_status']) && $wpData['post_status'] === 'publish') || $record->isPublished());
+						$this->writeAndPublishRecord($record, $isPublished);
+					}
 				} catch (Exception $e) {
 					$this->log($record, 'error', $e);
 				}
@@ -1124,7 +1130,8 @@ class WordpressImportService extends Object {
 	 *	Set the $Content
 	 */
 	public function setContentOnRecord(DataObjectInterface $record, $post_content) {
-		return $this->{$this->_content_set_callback}($record, $post_content);
+		$calledWriteOnRecord = $this->{$this->_content_set_callback}($record, $post_content);
+		return $calledWriteOnRecord;
 	}
 
 	/**
@@ -1145,6 +1152,7 @@ class WordpressImportService extends Object {
 		if ($record->Content !== $post_content) {
 			$record->Content = $post_content;
 		}
+		return false;
 	}
 
 	/**
@@ -1155,7 +1163,9 @@ class WordpressImportService extends Object {
 	}
 
 	/**
-	 * Write an ElementContent block with $Content
+	 * Write an ElementContent block with $Content.
+	 *
+	 * @return boolean
 	 */
 	public function setElementalContent(DataObjectInterface $record, $post_content) {
 		if (!isset($this->_classes_using_wordpress_extension['ElementContent'])) {
@@ -1176,41 +1186,35 @@ class WordpressImportService extends Object {
 			$subRecord->HTML = $post_content;
 			$subRecord->WordpressData = $record->WordpressData;
 			$elementBlocks->add($subRecord);
-			// note(Jake): when $record is written, the rest will write into it. 3.2+ at least.
+			// note(Jake): when page $record is written, the rest will write into it. 3.2+ at least.
 		} else {
 			$subRecord = $elementBlocks->filter(array(
 				'WordpressID' => $record->WordpressID,
 				'ClassName' => 'ElementContent',
 			))->first();
+			$isNew = false;
 			if (!$subRecord) {
 				$subRecord = ElementContent::create();
+				$isNew = true;
 			}
-			// Avoid getChangedFields triggering below by checking equality first.
-			if ($subRecord->HTML !== $post_content)  {
+			if ($subRecord->HTML !== $post_content) {
+				// Avoid getChangedFields triggering below by checking equality first.
 				$subRecord->HTML = $post_content;
 			}
 			$subRecord->WordpressData = $record->WordpressData;
-			if (!$subRecord->exists()) {
-				$elementBlocks->add($subRecord);
-			} else {
-				$changedFields = $subRecord->getChangedFields(true, DataObject::CHANGE_VALUE);
-				// NOTE(Jake): Checking for changes against HTML can be finicky, so ignore it. Any changes
-				//			   should be caught in the 'WordpressData' serialized-string and trigger a write
-				//			   anyway.
-				unset($changedFields['HTML']);
-				if ($changedFields) {
-					try {
-						$subRecord->write();
-						$this->log($subRecord, 'changed', null, 1);
-						if ($record->isPublished() && $subRecord->hasMethod('publish')) {
-							$subRecord->publish('Stage', 'Live');
-							$this->log($subRecord, 'published', null, 1);
-						}
-					} catch (Exception $e) {
-						$this->log($subRecord, 'error', $e, 1);
-						throw $e;
-					}
+			$changedFields = $subRecord->getChangedFields(true, DataObject::CHANGE_VALUE);
+			if ($changedFields) {
+				try {
+					$isPublished = $subRecord->isPublished();
+					$this->writeAndPublishRecord($subRecord);
+					return true;
+				} catch (Exception $e) {
+					$this->log($subRecord, 'error', $e, 1);
+					throw $e;
 				}
+			}
+			if ($isNew) {
+				$elementBlocks->add($subRecord);
 			}
 		}
 	}
@@ -1354,6 +1358,18 @@ class WordpressImportService extends Object {
 	 */ 
 	public function log_error_handler($errno, $errstr, $errfile, $errline, $errcontext) {
 		DB::alteration_message($errstr, 'error');
+
+		// Send out the error details to the logger for writing
+		SS_Log::log(
+			array(
+				'errno' => $errno,
+				'errstr' => $errstr,
+				'errfile' => $errfile,
+				'errline' => $errline,
+				'errcontext' => $errcontext
+			),
+			SS_Log::ERR
+		);
 	}
 
 	/**

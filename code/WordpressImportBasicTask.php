@@ -160,7 +160,7 @@ class WordpressImportBasicTask extends BuildTask {
 				$this->wordpressImportService->log($e->toMessage(), 'error');
 			}
 			try {
-				// Import Gravity Forms as User Defined Forms.
+				// Import Gravity Forms as User Defined Forms (3+).
 				$this->wordpressImportService->importGravityForms();
 			} catch (WordpressImportException $e) {
 				$this->wordpressImportService->log($e->toMessage(), 'error');

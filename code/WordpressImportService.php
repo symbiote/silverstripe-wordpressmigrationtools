@@ -1,6 +1,14 @@
 <?php 
 
 class WordpressImportService extends Object {
+	/**
+	 * Override wp_options in the config.
+	 *
+	 * @var string
+	 */
+	private static $options = array(
+		//'siteurl' => 'http://www.mysite.com.au'
+	);
 
 	/**
 	 * @var WordpressDatabase
@@ -713,6 +721,21 @@ class WordpressImportService extends Object {
 	}
 
 	/**
+	 * Get an option from the 'wp_options' table.
+	 * Can be overriden with 'options' config.
+	 *
+	 * @var mixed
+	 */
+	public function getOption($name) {
+		$options = $this->config()->options;
+		if ($options && isset($options[$name]) && $options[$name]) {
+			return $options[$name];
+		}
+		$result = $this->_db->getOption($name);
+		return $result;
+	}
+
+	/**
 	 * 
 	 */
 	public function fixPostContentURLs() {
@@ -748,9 +771,9 @@ class WordpressImportService extends Object {
 
 		// todo(Jake): Allow for setting a manual siteurl with configs that takes precedence
 		//			   over this. Wordpress allows such behaviour with its define() configs.
-		$wordpressSiteURL = $this->_db->getOption('siteurl');
+		$wordpressSiteURL = $this->getOption('siteurl');
 		if (!$wordpressSiteURL) {
-			throw new Exception('Unable to determine "siteurl" from options table.');
+			throw new Exception('Unable to determine "siteurl" from options table or config.');
 		}
 
 		//

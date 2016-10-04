@@ -721,6 +721,20 @@ class WordpressImportService extends Object {
 	}
 
 	/**
+	 * Get the asset URL
+	 * (Not calling File::getURL() as CDNContent module may break the URL I want to return)
+	 *
+	 * @return string
+	 */
+	public function getAssetURL($fileRecord) {
+		if (!$fileRecord) {
+			return '';
+		}
+		$url = Controller::join_links(Director::baseURL(), $fileRecord->getFilename());
+        return $url;
+	}
+
+	/**
 	 * Get an option from the 'wp_options' table.
 	 * Can be overriden with 'options' config.
 	 *
@@ -751,7 +765,7 @@ class WordpressImportService extends Object {
 			$filename = $record->Filename;
 			$filename = WordpressAttachmentFileResolver::extract_all_after_year($filename);
 
-			$relativeLink = substr($record->Link(), 1);
+			$relativeLink = ltrim($this->getAssetURL($record), '/');
 			$fileOldURLtoNewURL[$filename] = $relativeLink;
 			$fileOldURLtoID[$filename] = $record->ID;
 

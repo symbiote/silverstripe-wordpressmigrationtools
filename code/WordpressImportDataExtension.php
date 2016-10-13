@@ -11,6 +11,13 @@ class WordpressImportDataExtension extends DataExtension {
 	);
 
 	/**
+	 * To turn on in your configuration once you've imported your Wordpress data.
+	 *
+	 * @var boolean
+	 */
+	private static $disable_write_check = false;
+
+	/**
 	 * If set to null, it will automatically set to true in a BuildTask/CLI context, otherwise
 	 * it will be be false.
 	 *
@@ -77,6 +84,9 @@ class WordpressImportDataExtension extends DataExtension {
 	}
 
 	public function onBeforeWrite() {
+		if (Config::inst()->get(__CLASS__, 'disable_write_check')) {
+			return;
+		}
 		$this->owner->WordpressWasLastWriteImporter = 0;
 
 		if (self::$throw_error_if_blank_wordpress_data === null) {

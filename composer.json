@@ -1,5 +1,5 @@
 {
-    "name": "silbinarywolf/silverstripe-wordpressmigrationtools",
+    "name": "symbiote/silverstripe-wordpressmigrationtools",
     "type": "silverstripe-module",
     "description": "A wordpress importer that handles various operations.",
     "keywords": ["wordpress", "silverstripe"],
@@ -7,15 +7,21 @@
     "authors": [
     {
         "name": "Jake Bentvelzen",
-        "email": "jake@silverstripe.com.au"
+        "email": "jake@symbiote.com.au"
     }],
     "require": {
-        "silbinarywolf/php-wordpress-database-tools": "~1.0",
+        "symbiote/php-wordpress-database-tools": "~1.0",
         "silverstripe/framework": "~3.2",
         "silverstripe/cms": "~3.2",
         "php": ">=5.3.0"
     },
     "extra": {
-        "installer-name": "wordpressmigrationtools"
-    }
+        "installer-name": "wordpressmigrationtools",
+        "branch-alias": {
+            "dev-master": "2.0.x-dev"
+        }
+    },
+	"replace": {
+		"silbinarywolf/silverstripe-wordpressmigrationtools": "self.version"
+	}
 }

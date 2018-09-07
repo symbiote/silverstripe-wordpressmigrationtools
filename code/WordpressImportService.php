@@ -482,8 +482,8 @@ class WordpressImportService extends Object {
 					'Created'  => $wpData['post_date'],
 					'LastEdited' =>  $wpData['post_modified'],
 					'Content' => $wpData['post_content'],
-					'Description' => $wpData['post_content'], // Support SSAU/ba-sis (https://github.com/silverstripe-australia/silverstripe-ba-sis)
-					'CDNFile' => $cdnFile, // Support SSAU/cdncontent module (https://github.com/silverstripe-australia/silverstripe-cdncontent)
+					'Description' => $wpData['post_content'], // Support seed (https://github.com/symbiote/silverstripe-seed)
+					'CDNFile' => $cdnFile, // Support cdncontent module (https://github.com/symbiote/silverstripe-cdncontent)
 				);
 				if ($fileResolver->isFileExtensionImage($relativeFilepath)) {
 					$record = Image::create($recordData);
